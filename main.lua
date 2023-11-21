@@ -27,7 +27,7 @@ function AP:init()
     self.HOST_PORT = "38281"
     self.PASSWORD = ""
     self.SLOT_NAME = "Player1"
-    -- print("called AP:init", 1.5, self.HOST_ADDRESS, self.HOST_PORT, self.SLOT_NAME, self.PASSWORD)    
+    -- print("called AP:init", 1.5, self.HOST_ADDRESS, self.HOST_PORT, self.SLOT_NAME, self.PASSWORD)
     -- ap client / statemachine
     self:initAPClient()
 
@@ -53,11 +53,19 @@ function AP:init()
         end
     }
     self:initMCM()
-    self:loadConnectionInfo()
-    self:loadSettings()
+
+    --Game never returns save data at this point
+    --self:loadConnectionInfo()
+    --self:loadSettings()
+
     -- mod callbacks
     function self.onPostGameStarted(mod, isContinued)
         dbg_log('self.onPostGameStarted')
+
+        -- Earliest time the game knows about save data that I can find so far
+        self:loadConnectionInfo()
+        self:loadSettings()
+
         if not isContinued then
             self.JUST_STARTED = true
             self.JUST_STARTED_TIMER = 100
@@ -160,7 +168,7 @@ function AP:init()
             dbg_log(string.format('onPrePickupCollision: item is potential AP item %s %s %s %s %s', item_step,
                 self.CUR_ITEM_STEP_VAL, #self.AP_CLIENT.missing_locations, pickup.SubType, pickup.State))
             if self.CUR_ITEM_STEP_VAL == item_step then
-                -- self:clearLocations(1)                
+                -- self:clearLocations(1)
                 self.CUR_ITEM_STEP_VAL = 0
                 local itemConfig = Isaac.GetItemConfig():GetCollectible(pickup.SubType)
                 if (pickup:IsShopItem() and (itemConfig.ShopPrice == 10 or (pickup.Price < 1 and itemConfig.DevilPrice == 1 or not itemConfig.DevilPrice))) then
@@ -438,7 +446,7 @@ function AP:init()
 
     self.killed_bosses = {}
 
-    self.bossRewardAmounts = { -- Name = {{Direct Goals}, Amount of items to send}, 
+    self.bossRewardAmounts = { -- Name = {{Direct Goals}, Amount of items to send},
         [self.bosses.MOM] = 1,
         [self.bosses.BOSS_RUSH] = 2,
         [self.bosses.MOMS_HEART] = 2,
