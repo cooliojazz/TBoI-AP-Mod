@@ -210,11 +210,9 @@ function AP:spawnCollectible(item, forceItem)
     local item_config = Isaac:GetItemConfig():GetCollectible(item)
     -- dbg_log("AP:spawnCollectible "..tostring(item_config))
     -- print("AP:spawnCollectible", splayer:GetCollectibleCount())
-    if (item_config.Type ~= ItemType.ITEM_ACTIVE or player:GetActiveItem(ActiveSlot.SLOT_PRIMARY) == 0) and
-        not (player:GetPlayerType() == PlayerType.PLAYER_ISAAC_B and player:GetCollectibleCount() > 8) and item ~=
-        CollectibleType.COLLECTIBLE_TMTRAINER then
+    if self.FORCE_PICKUP and (item_config.Type ~= ItemType.ITEM_ACTIVE or player:GetActiveItem(ActiveSlot.SLOT_PRIMARY) == 0) and not (player:GetPlayerType() == PlayerType.PLAYER_ISAAC_B and player:GetCollectibleCount() > 8) and item ~= CollectibleType.COLLECTIBLE_TMTRAINER then
         -- FixMe: transformations cause graphical glitches sometimes
-        -- player:QueueItem(item_config)        
+        -- player:QueueItem(item_config)
         -- player:FlushQueueItem()
         -- dbg_log("AP:spawnCollectible AddCollectible")
         player:AddCollectible(item)
@@ -230,16 +228,15 @@ function AP:spawnCollectible(item, forceItem)
             pos = room:FindFreePickupSpawnPosition(startPos, num, true, false)
             -- print("AP:spawnCollectible", "in loop", pos, num)
         end
-        -- print("AP:spawnCollectible", "after loop", pos, num)
-        local entity = Isaac.Spawn(EntityType.ENTITY_PICKUP, PickupVariant.PICKUP_COLLECTIBLE, item, pos, Vector(0, 0),
-            nil)
-        local pickup = entity:ToPickup()
-        if forceItem then
-            -- make sure the item does not change into anything else
-            pickup:Morph(EntityType.ENTITY_PICKUP, PickupVariant.PICKUP_COLLECTIBLE, item, true, true, true)
+        if num < 500 then
+            local roomI = self:currentRoomIndex()
+            self.COLLECTIBLE_CACHE[roomI][tostring(item)] = true
+            self:saveCacheData()
+            -- print("AP:spawnCollectible", "after loop", pos, num)
+            Isaac.Spawn(EntityType.ENTITY_PICKUP, PickupVariant.PICKUP_COLLECTIBLE, item, pos, Vector(0, 0), nil)
+        else
+            dbg_log("Failed to place pickup, ignoring")
         end
-        -- used to not make AP spawned item collectable until rerolled
-        pickup.Touched = true
     end
 end
 function AP:spawnRandomCollectibleFromPool(pool)

@@ -35,6 +35,7 @@ function AP:init()
     self.MAX_RECONNECT_TRIES = 1
     self.RECONNECT_TRIES = 0
     self.SHOULD_AUTO_CONNECT = false
+    self.FORCE_PICKUP = false
     dbg_log("called AP:init 2")
     -- Isaac mod ref
     self.MOD_REF = RegisterMod(self.MOD_NAME, 1)
@@ -54,17 +55,24 @@ function AP:init()
     }
     self:initMCM()
 
-    --Game never returns save data at this point
-    --self:loadConnectionInfo()
-    --self:loadSettings()
+    self.COLLECTIBLE_CACHE = {}
+    function self.currentRoomIndex()
+        return tostring(Game():GetLevel():GetCurrentRoomDesc().SafeGridIndex)
+    end
+    function checkRoomCache()
+        local room = self:currentRoomIndex()
+        if self.COLLECTIBLE_CACHE[room] == nil then
+            self.COLLECTIBLE_CACHE[room] = {}
+        end
+    end
 
     -- mod callbacks
     function self.onPostGameStarted(mod, isContinued)
         dbg_log('self.onPostGameStarted')
 
-        -- Earliest time the game knows about save data that I can find so far
         self:loadConnectionInfo()
         self:loadSettings()
+        self:loadCacheData()
 
         if not isContinued then
             self.JUST_STARTED = true
@@ -112,85 +120,44 @@ function AP:init()
         end
         self.AP_CLIENT = nil
     end
-    function self.onPrePickupCollision(mod, pickup, collider, low)
-        local totalLocations = self.SLOT_DATA.totalLocations
-        local checkedLocations = #self.AP_CLIENT.checked_locations
-        local collectableIndex = getCollectableIndex(pickup)
-        if pickup.Variant ~= PickupVariant.PICKUP_COLLECTIBLE or collider.Type ~= EntityType.ENTITY_PLAYER or
-            checkedLocations >= totalLocations or (pickup.Touched and pickup.SubType ~= self.AP_ITEM_ID) -- used to not make AP spawned item collectable until rerolled
-        or pickup.SubType == CollectibleType.COLLECTIBLE_NULL -- might get called when bumping in a already collected collectable
-        then
-            return
-        end
-        local itemConfig = Isaac.GetItemConfig():GetCollectible(pickup.SubType)
-        -- check for special items like polaroid/negative, key/knife pieces or dad's note
-        if itemConfig:HasTags(ItemConfig.TAG_QUEST) then
-            return
-        end
-        -- check timer
-        if self.PICKUP_TIMER and self.PICKUP_TIMER > 0 then
-            return false
-        end
-        local player = collider:ToPlayer()
-        local room = Game():GetRoom()
-        -- check if we can buy this, if shop item
-        if pickup:IsShopItem() then
-            -- dbg_log(
-            --     "onPrePickupCollision " .. tostring(pickup.Price) .. " " .. tostring(player:GetMaxHearts()) .. " " ..
-            --         tostring(player:GetSoulHearts()) .. " " .. tostring(player:WillPlayerRevive()))
-            if pickup.Price > 0 then
-                if pickup.Price > player:GetNumCoins() then
-                    return
-                end
-                -- 1 or 2 hearts deal
-            elseif pickup.Price > -3 then
-                if pickup.Price * -2 > player:GetMaxHearts() and not player:WillPlayerRevive() then
-                    return
-                end
-                -- 3 soul hearts deal
-            elseif pickup.Price == -3 then
-                if pickup.Price * -2 > player:GetSoulHearts() and not player:WillPlayerRevive() then
-                    return
-                end
-                -- 1 heart/2 soul hearts deal
-            elseif pickup.Price == -4 then
-                if (player:GetMaxHearts() < 2 or player:GetSoulHearts() < 4) and not player:WillPlayerRevive() then
-                    return
+    -- Items that are still transformed: chest items
+    function self.onPreEntitySpawn(mod, type, variant, subType, pos, velocity, spawner, seed)
+        dbg_log("entitySpawn: " .. type .. " " .. variant .. " " .. subType)
+        if type == EntityType.ENTITY_PICKUP and (variant == PickupVariant.PICKUP_COLLECTIBLE or variant == PickupVariant.PICKUP_SHOPITEM) and subType ~= self.AP_ITEM_ID then
+            local room = self:currentRoomIndex()
+            --local room = Game():GetLevel():GetCurrentRoomIndex()
+            checkRoomCache() -- Need to check if item spawned before room event
+            if self.COLLECTIBLE_CACHE[room][tostring(subType)] ~= true then
+                -- Errors if run before connected, what to do?
+                local item_step = self.SLOT_DATA.itemPickupStep
+                self.CUR_ITEM_STEP_VAL = self.CUR_ITEM_STEP_VAL + 1
+                dbg_log(string.format('onPreEntitySpawn: item is potential AP item %s %s %s %s', item_step, self.CUR_ITEM_STEP_VAL, #self.AP_CLIENT.missing_locations, subType))
+                if self.CUR_ITEM_STEP_VAL == item_step then
+                    -- self:clearLocations(1)
+                    self.CUR_ITEM_STEP_VAL = 0
+                    local itemConfig = Isaac.GetItemConfig():GetCollectible(subType)
+                    local apItem = {type, variant, subType, seed}
+                    if false then
+                    --if (pickup:IsShopItem() and (itemConfig.ShopPrice == 10 or (pickup.Price < 1 and itemConfig.DevilPrice == 1 or not itemConfig.DevilPrice))) then
+                        -- print("onPrePickupCollision", "cheap", self.AP_ITEM_ID_CHEAP)
+                        --pickup:Morph(EntityType.ENTITY_PICKUP, PickupVariant.PICKUP_COLLECTIBLE, self.AP_ITEM_ID_CHEAP, true, true, true)
+                        apItem = {type, variant, self.AP_ITEM_ID_CHEAP, seed}
+                    else
+                        -- print("onPrePickupCollision", "normal", self.AP_ITEM_ID)
+                        --pickup:Morph(EntityType.ENTITY_PICKUP, PickupVariant.PICKUP_COLLECTIBLE, self.AP_ITEM_ID, true, true, true)
+                        apItem = {type, variant, self.AP_ITEM_ID, seed}
+                    end
+                    --pickup.Touched = true -- ToDo: Test with boss rush/challenge rooms
+                    local player = Isaac.GetPlayer()
+                    if itemConfig and itemConfig.Quality > 1 then
+                        player:AnimateSad()
+                    else
+                        player:AnimateHappy()
+                    end
+                    return apItem
                 end
             end
         end
-        -- mod:RemoveCallback(ModCallbacks.MC_PRE_PICKUP_COLLISION, self.onPrePickupCollision)
-        self.PICKUP_TIMER = 90
-        if player:CanPickupItem() and pickup.Wait <= 0 and pickup.SubType ~= self.AP_ITEM_ID then
-            -- print("onPrePickupCollision", pickup.Wait, pickup.State)
-            local item_step = self.SLOT_DATA.itemPickupStep
-            self.CUR_ITEM_STEP_VAL = self.CUR_ITEM_STEP_VAL + 1
-            dbg_log(string.format('onPrePickupCollision: item is potential AP item %s %s %s %s %s', item_step,
-                self.CUR_ITEM_STEP_VAL, #self.AP_CLIENT.missing_locations, pickup.SubType, pickup.State))
-            if self.CUR_ITEM_STEP_VAL == item_step then
-                -- self:clearLocations(1)
-                self.CUR_ITEM_STEP_VAL = 0
-                local itemConfig = Isaac.GetItemConfig():GetCollectible(pickup.SubType)
-                if (pickup:IsShopItem() and (itemConfig.ShopPrice == 10 or (pickup.Price < 1 and itemConfig.DevilPrice == 1 or not itemConfig.DevilPrice))) then
-                    -- print("onPrePickupCollision", "cheap", self.AP_ITEM_ID_CHEAP)
-                    pickup:Morph(EntityType.ENTITY_PICKUP, PickupVariant.PICKUP_COLLECTIBLE, self.AP_ITEM_ID_CHEAP,
-                        true, true, true)
-                else
-                    -- print("onPrePickupCollision", "normal", self.AP_ITEM_ID)
-                    pickup:Morph(EntityType.ENTITY_PICKUP, PickupVariant.PICKUP_COLLECTIBLE, self.AP_ITEM_ID, true,
-                        true, true)
-                end
-                pickup.Touched = true -- ToDo: Test with boss rush/challenge rooms
-                if itemConfig and itemConfig.Quality > 1 then
-                    player:AnimateSad()
-                else
-                    player:AnimateHappy()
-                end
-                -- mod:AddCallback(ModCallbacks.MC_PRE_PICKUP_COLLISION, self.onPrePickupCollision)
-                return false
-            end
-        end
-        -- mod:AddCallback(ModCallbacks.MC_PRE_PICKUP_COLLISION, self.onPrePickupCollision)
     end
     function self.onPostPEffectUpdate(mod, player)
         for id, impl in pairs(self.COLLECTABLE_IMPLS) do
@@ -309,6 +276,10 @@ function AP:init()
         end
     end
     function self.onPostNewLevel()
+        dbg_log("onPostNewLevel")
+        self.COLLECTIBLE_CACHE = {}
+        checkRoomCache() -- Need to recheck current room as new level is called after room setup
+        self:saveCacheData()
         local stage = self:getStageNum()
         if self.FURTHEST_FLOOR < stage then
             self.FURTHEST_FLOOR = stage
@@ -319,14 +290,18 @@ function AP:init()
             self.ITEM_QUEUE_CURRENT_MAX = stage * self.ITEM_QUEUE_MAX_PER_FLOOR
         end
     end
+    function self.onPostNewRoom(mod)
+        checkRoomCache()
+    end
     self.MOD_REF:AddCallback(ModCallbacks.MC_POST_GAME_STARTED, self.onPostGameStarted)
     self.MOD_REF:AddCallback(ModCallbacks.MC_POST_RENDER, self.onPostRender)
     self.MOD_REF:AddCallback(ModCallbacks.MC_PRE_GAME_EXIT, self.onPreGameExit)
-    self.MOD_REF:AddCallback(ModCallbacks.MC_PRE_PICKUP_COLLISION, self.onPrePickupCollision)
+    self.MOD_REF:AddCallback(ModCallbacks.MC_PRE_ENTITY_SPAWN, self.onPreEntitySpawn)
     self.MOD_REF:AddCallback(ModCallbacks.MC_POST_PEFFECT_UPDATE, self.onPostPEffectUpdate)
     self.MOD_REF:AddCallback(ModCallbacks.MC_POST_ENTITY_KILL, self.onPostEntityKill)
     self.MOD_REF:AddCallback(ModCallbacks.MC_PRE_SPAWN_CLEAN_AWARD, self.onPreSpawnClearAward)
     self.MOD_REF:AddCallback(ModCallbacks.MC_POST_NEW_LEVEL, self.onPostNewLevel)
+    self.MOD_REF:AddCallback(ModCallbacks.MC_POST_NEW_ROOM, self.onPostNewRoom)
     print("called AP:init", 3)
     -- global Isaac info
     self.IS_CONTINUED = false

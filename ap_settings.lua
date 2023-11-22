@@ -31,6 +31,7 @@ function AP:saveSettings()
     modData.INFO_TEXT_SCALE = self.INFO_TEXT_SCALE
     modData.HUD_OFFSET = self.HUD_OFFSET
     modData.SHOULD_AUTO_CONNECT = self.SHOULD_AUTO_CONNECT
+    modData.FORCE_PICKUP = self.FORCE_PICKUP
     self.MOD_REF:SaveData(json.encode(modData))
 end
 function AP:loadSettings()
@@ -48,6 +49,9 @@ function AP:loadSettings()
             end
             if modData.SHOULD_AUTO_CONNECT ~= nil then
                 self.SHOULD_AUTO_CONNECT = modData.SHOULD_AUTO_CONNECT
+            end
+            if modData.FORCE_PICKUP ~= nil then
+                self.FORCE_PICKUP = modData.FORCE_PICKUP
             end
         end
     end
@@ -75,5 +79,21 @@ function AP:saveOtherData(seed)
     modData.SAVED_ITEM_INDEX = self.LAST_RECEIVED_ITEM_INDEX
     modData.SAVED_SEED = seed
     modData.CUR_ITEM_STEP_VAL = self.CUR_ITEM_STEP_VAL
+    self.MOD_REF:SaveData(json.encode(modData))
+end
+function AP:loadCacheData()
+    if self.MOD_REF:HasData() then
+        local modData = json.decode(self.MOD_REF:LoadData())
+        if modData ~= nil and modData.COLLECTIBLE_CACHE ~= nil then
+            self.COLLECTIBLE_CACHE = modData.COLLECTIBLE_CACHE
+        end
+    end
+end
+function AP:saveCacheData()
+    local modData = {}
+    if self.MOD_REF:HasData() then
+        modData = json.decode(self.MOD_REF:LoadData())
+    end
+    modData.COLLECTIBLE_CACHE = self.COLLECTIBLE_CACHE
     self.MOD_REF:SaveData(json.encode(modData))
 end

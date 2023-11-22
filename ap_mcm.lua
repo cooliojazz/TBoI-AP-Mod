@@ -80,7 +80,7 @@ function AP:initMCM()
         Display = function()
             return "List Hints"
         end,
-        OnChange = function(v)            
+        OnChange = function(v)
             self:sendHintCommand(false, nil)
         end,
         Info = {"Click this to list hints for your world"}
@@ -93,7 +93,7 @@ function AP:initMCM()
         Display = function()
             return "Get a Hint"
         end,
-        OnChange = function(v)            
+        OnChange = function(v)
             self:sendHintCommand(false, "Any Progression")
         end,
         Info = {"Click this to a hint for any progression item from your world"}
@@ -106,7 +106,7 @@ function AP:initMCM()
         Display = function()
             return "Collect"
         end,
-        OnChange = function(v)            
+        OnChange = function(v)
             self:collectSlot()
         end,
         Info = {"Click this to collect all checks for this world"}
@@ -123,11 +123,29 @@ function AP:initMCM()
             end
             return "Auto-Connect: "..str
         end,
-        OnChange = function(v)            
+        OnChange = function(v)
             self.SHOULD_AUTO_CONNECT = not self.SHOULD_AUTO_CONNECT
             self:saveSettings()
         end,
         Info = {"Should AP Auto-Connect on run start?"}
+    })
+    ModConfigMenu.AddSetting(self.MOD_NAME, AP.OTHER_SETTINGS_HEADER, {
+        Type = ModConfigMenu.OptionType.BOOLEAN,
+        CurrentSetting = function()
+            return self.FORCE_PICKUP
+        end,
+        Display = function()
+            local str = "Off"
+            if self.FORCE_PICKUP then
+                str = "On"
+            end
+            return "Force pickup items: "..str
+        end,
+        OnChange = function(v)
+            self.FORCE_PICKUP = not self.FORCE_PICKUP
+            self:saveSettings()
+        end,
+        Info = {"Should passive items be automatically given to the player or spawned nearby on pedastals?"}
     })
     ModConfigMenu.AddSetting(self.MOD_NAME, AP.OTHER_SETTINGS_HEADER, {
         Type = ModConfigMenu.OptionType.BOOLEAN,
@@ -137,7 +155,7 @@ function AP:initMCM()
         Display = function()
             return "Release"
         end,
-        OnChange = function(v)            
+        OnChange = function(v)
             self:releaseSlot()
         end,
         Info = {"Click this to release all checks from this world"}
@@ -351,7 +369,7 @@ function AP:initMCM()
     })
     function self.onInputAction()
         self:trackTypingInput()
-    end    
+    end
     function self.onPostRender()
         if self.WAIT_TYPING_ENTER_EXIT > 0 then
             self.WAIT_TYPING_ENTER_EXIT = self.WAIT_TYPING_ENTER_EXIT - 1
@@ -365,7 +383,7 @@ function AP:trackTypingInput()
     if not InputHelper or not ModConfigMenu then
         return
     end
-    --print("self.trackTypingInput",0.2, self.UNLOCK_TYPING)   
+    --print("self.trackTypingInput",0.2, self.UNLOCK_TYPING)
     if not self.UNLOCK_TYPING then
         ModConfigMenu.ControlsEnabled = true
         return
@@ -397,7 +415,7 @@ function AP:trackTypingInput()
             if self.PRESSED_BUTTONS[i] then
                 for j = 32, 400 do
                     if self.PRESSED_BUTTONS[i][j] and self.PRESSED_BUTTONS[i][j] > 0 then
-                        print("self.trackTypingInput",2,self.PRESSED_BUTTONS[i][j],self.PREV_PRESSED_BUTTONS[i][j])                                       
+                        print("self.trackTypingInput",2,self.PRESSED_BUTTONS[i][j],self.PREV_PRESSED_BUTTONS[i][j])
                     end
                     if self.PRESSED_BUTTONS[i][j] and self.PRESSED_BUTTONS[i][j] > 0 and
                         not (self.PREV_PRESSED_BUTTONS and self.PREV_PRESSED_BUTTONS[i] and self.PREV_PRESSED_BUTTONS[i][j] and
@@ -441,7 +459,7 @@ function AP:trackTypingInput()
             self.HOST_PORT = self.CURRENT_TYPING_STRING
         elseif self.TYPING_TARGET == "SLOT_NAME" then
             self.SLOT_NAME = self.CURRENT_TYPING_STRING
-        elseif self.TYPING_TARGET == "PASSWORD" then            
+        elseif self.TYPING_TARGET == "PASSWORD" then
             self.PASSWORD = self.CURRENT_TYPING_STRING
         end
         self.CURRENT_TYPING_STRING = ""
