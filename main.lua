@@ -120,41 +120,33 @@ function AP:init()
         end
         self.AP_CLIENT = nil
     end
-    -- Items that are still transformed: chest items
-    function self.onPreEntitySpawn(mod, type, variant, subType, pos, velocity, spawner, seed)
-        dbg_log("entitySpawn: " .. type .. " " .. variant .. " " .. subType)
-        if type == EntityType.ENTITY_PICKUP and (variant == PickupVariant.PICKUP_COLLECTIBLE or variant == PickupVariant.PICKUP_SHOPITEM) and subType ~= self.AP_ITEM_ID then
+    -- Setting down active items breaks?
+    -- Should there be exception for mom's chest?
+    function self.postPickupInit(mod, pickup)
+        if pickup.Variant == PickupVariant.PICKUP_COLLECTIBLE then
+            dbg_log("init collectible!: " .. pickup.SubType)
             local room = self:currentRoomIndex()
-            --local room = Game():GetLevel():GetCurrentRoomIndex()
             checkRoomCache() -- Need to check if item spawned before room event
-            if self.COLLECTIBLE_CACHE[room][tostring(subType)] ~= true then
+            if self.COLLECTIBLE_CACHE[room][tostring(pickup.SubType)] ~= true then
                 -- Errors if run before connected, what to do?
                 local item_step = self.SLOT_DATA.itemPickupStep
                 self.CUR_ITEM_STEP_VAL = self.CUR_ITEM_STEP_VAL + 1
-                dbg_log(string.format('onPreEntitySpawn: item is potential AP item %s %s %s %s', item_step, self.CUR_ITEM_STEP_VAL, #self.AP_CLIENT.missing_locations, subType))
+                dbg_log(string.format('onPreEntitySpawn: item is potential AP item %s %s %s %s', item_step, self.CUR_ITEM_STEP_VAL, #self.AP_CLIENT.missing_locations, pickup.SubType))
                 if self.CUR_ITEM_STEP_VAL == item_step then
                     -- self:clearLocations(1)
                     self.CUR_ITEM_STEP_VAL = 0
-                    local itemConfig = Isaac.GetItemConfig():GetCollectible(subType)
-                    local apItem = {type, variant, subType, seed}
-                    if false then
-                    --if (pickup:IsShopItem() and (itemConfig.ShopPrice == 10 or (pickup.Price < 1 and itemConfig.DevilPrice == 1 or not itemConfig.DevilPrice))) then
-                        -- print("onPrePickupCollision", "cheap", self.AP_ITEM_ID_CHEAP)
-                        --pickup:Morph(EntityType.ENTITY_PICKUP, PickupVariant.PICKUP_COLLECTIBLE, self.AP_ITEM_ID_CHEAP, true, true, true)
-                        apItem = {type, variant, self.AP_ITEM_ID_CHEAP, seed}
-                    else
-                        -- print("onPrePickupCollision", "normal", self.AP_ITEM_ID)
-                        --pickup:Morph(EntityType.ENTITY_PICKUP, PickupVariant.PICKUP_COLLECTIBLE, self.AP_ITEM_ID, true, true, true)
-                        apItem = {type, variant, self.AP_ITEM_ID, seed}
+                    local itemConfig = Isaac.GetItemConfig():GetCollectible(pickup.SubType)
+                    local apItem = self.AP_ITEM_ID
+                    if (pickup.Variant == PickupVariant.PICKUP_SHOPITEM and (itemConfig.ShopPrice == 10 or (pickup.Price < 1 and itemConfig.DevilPrice == 1 or not itemConfig.DevilPrice))) then
+                        apItem = self.AP_ITEM_ID_CHEAP
                     end
-                    --pickup.Touched = true -- ToDo: Test with boss rush/challenge rooms
+                    pickup:Morph(EntityType.ENTITY_PICKUP, PickupVariant.PICKUP_COLLECTIBLE, apItem, true, false, false)
                     local player = Isaac.GetPlayer()
                     if itemConfig and itemConfig.Quality > 1 then
                         player:AnimateSad()
                     else
                         player:AnimateHappy()
                     end
-                    return apItem
                 end
             end
         end
@@ -296,7 +288,7 @@ function AP:init()
     self.MOD_REF:AddCallback(ModCallbacks.MC_POST_GAME_STARTED, self.onPostGameStarted)
     self.MOD_REF:AddCallback(ModCallbacks.MC_POST_RENDER, self.onPostRender)
     self.MOD_REF:AddCallback(ModCallbacks.MC_PRE_GAME_EXIT, self.onPreGameExit)
-    self.MOD_REF:AddCallback(ModCallbacks.MC_PRE_ENTITY_SPAWN, self.onPreEntitySpawn)
+    self.MOD_REF:AddCallback(ModCallbacks.MC_POST_PICKUP_INIT, self.postPickupInit)
     self.MOD_REF:AddCallback(ModCallbacks.MC_POST_PEFFECT_UPDATE, self.onPostPEffectUpdate)
     self.MOD_REF:AddCallback(ModCallbacks.MC_POST_ENTITY_KILL, self.onPostEntityKill)
     self.MOD_REF:AddCallback(ModCallbacks.MC_PRE_SPAWN_CLEAN_AWARD, self.onPreSpawnClearAward)
