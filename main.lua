@@ -56,9 +56,6 @@ function AP:init()
     self:initMCM()
 
     self.COLLECTIBLE_CACHE = {}
-    function self.currentRoomIndex()
-        return tostring(Game():GetLevel():GetCurrentRoomDesc().SafeGridIndex)
-    end
     function checkRoomCache()
         local room = self:currentRoomIndex()
         if self.COLLECTIBLE_CACHE[room] == nil then
@@ -120,24 +117,26 @@ function AP:init()
         end
         self.AP_CLIENT = nil
     end
-    -- Setting down active items breaks?
+    -- Annoying swapping effect with binge eater, worth addressing?
+    -- Rerolls spawn new items, should they?
     -- Should there be exception for mom's chest?
+    -- Should it preserve special boss rewards?
     function self.postPickupInit(mod, pickup)
         if pickup.Variant == PickupVariant.PICKUP_COLLECTIBLE then
-            dbg_log("init collectible!: " .. pickup.SubType)
             local room = self:currentRoomIndex()
             checkRoomCache() -- Need to check if item spawned before room event
             if self.COLLECTIBLE_CACHE[room][tostring(pickup.SubType)] ~= true then
                 -- Errors if run before connected, what to do?
                 local item_step = self.SLOT_DATA.itemPickupStep
                 self.CUR_ITEM_STEP_VAL = self.CUR_ITEM_STEP_VAL + 1
-                dbg_log(string.format('onPreEntitySpawn: item is potential AP item %s %s %s %s', item_step, self.CUR_ITEM_STEP_VAL, #self.AP_CLIENT.missing_locations, pickup.SubType))
+                dbg_log(string.format('postPickupInit: item is potential AP item %s %s %s %s', item_step, self.CUR_ITEM_STEP_VAL, #self.AP_CLIENT.missing_locations, pickup.SubType))
                 if self.CUR_ITEM_STEP_VAL == item_step then
                     -- self:clearLocations(1)
                     self.CUR_ITEM_STEP_VAL = 0
                     local itemConfig = Isaac.GetItemConfig():GetCollectible(pickup.SubType)
                     local apItem = self.AP_ITEM_ID
-                    if (pickup.Variant == PickupVariant.PICKUP_SHOPITEM and (itemConfig.ShopPrice == 10 or (pickup.Price < 1 and itemConfig.DevilPrice == 1 or not itemConfig.DevilPrice))) then
+                    if pickup.Variant == PickupVariant.PICKUP_SHOPITEM and (itemConfig.ShopPrice == 10 or
+                            (pickup.Price < 1 and itemConfig.DevilPrice == 1 or not itemConfig.DevilPrice)) then
                         apItem = self.AP_ITEM_ID_CHEAP
                     end
                     pickup:Morph(EntityType.ENTITY_PICKUP, PickupVariant.PICKUP_COLLECTIBLE, apItem, true, false, false)
@@ -148,6 +147,16 @@ function AP:init()
                         player:AnimateHappy()
                     end
                 end
+            end
+        end
+    end
+    function self.prePickupCollision(mod, pickup, collider, low)
+        if pickup.Variant == PickupVariant.PICKUP_COLLECTIBLE then
+            local player = Isaac.GetPlayer()
+            local itemConfig = Isaac.GetItemConfig():GetCollectible(pickup.SubType)
+            if itemConfig.Type == ItemType.ITEM_ACTIVE and player:GetActiveItem() ~= nil then
+                self.COLLECTIBLE_CACHE[self:currentRoomIndex()][tostring(player:GetActiveItem())] = true
+                self:saveCacheData()
             end
         end
     end
@@ -282,13 +291,14 @@ function AP:init()
             self.ITEM_QUEUE_CURRENT_MAX = stage * self.ITEM_QUEUE_MAX_PER_FLOOR
         end
     end
-    function self.onPostNewRoom(mod)
+    function self.onPostNewRoom()
         checkRoomCache()
     end
     self.MOD_REF:AddCallback(ModCallbacks.MC_POST_GAME_STARTED, self.onPostGameStarted)
     self.MOD_REF:AddCallback(ModCallbacks.MC_POST_RENDER, self.onPostRender)
     self.MOD_REF:AddCallback(ModCallbacks.MC_PRE_GAME_EXIT, self.onPreGameExit)
     self.MOD_REF:AddCallback(ModCallbacks.MC_POST_PICKUP_INIT, self.postPickupInit)
+    self.MOD_REF:AddCallback(ModCallbacks.MC_PRE_PICKUP_COLLISION, self.prePickupCollision)
     self.MOD_REF:AddCallback(ModCallbacks.MC_POST_PEFFECT_UPDATE, self.onPostPEffectUpdate)
     self.MOD_REF:AddCallback(ModCallbacks.MC_POST_ENTITY_KILL, self.onPostEntityKill)
     self.MOD_REF:AddCallback(ModCallbacks.MC_PRE_SPAWN_CLEAN_AWARD, self.onPreSpawnClearAward)
@@ -474,6 +484,9 @@ function AP:init()
 end
 
 -- AP util funcs
+function AP:currentRoomIndex()
+    return tostring(Game():GetLevel():GetCurrentRoomDesc().SafeGridIndex)
+end
 function AP:collectItem(item)
     local id = item.item
     local roomDesc = Game():GetLevel():GetCurrentRoomDesc().Data

@@ -14,7 +14,8 @@ end
 function AP:loadConnectionInfo()
     if self.MOD_REF:HasData() then
         local modData = json.decode(self.MOD_REF:LoadData())
-        if modData ~= nil and modData.HOST_ADDRESS ~= nil and modData.HOST_PORT ~= nil and modData.PASSWORD ~= nil and modData.SLOT_NAME ~= nil then
+        if modData ~= nil and modData.HOST_ADDRESS ~= nil and modData.HOST_PORT ~= nil
+                and modData.PASSWORD ~= nil and modData.SLOT_NAME ~= nil then
             self.HOST_ADDRESS = modData.HOST_ADDRESS
             self.HOST_PORT = modData.HOST_PORT
             self.SLOT_NAME = modData.SLOT_NAME
