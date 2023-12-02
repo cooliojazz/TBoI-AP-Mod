@@ -120,12 +120,14 @@ function AP:init()
     -- Annoying swapping effect with binge eater, worth addressing?
     -- Rerolls spawn new items, should they?
     -- Should there be exception for mom's chest?
-    -- Should it preserve special boss rewards?
     function self.postPickupInit(mod, pickup)
         if pickup.Variant == PickupVariant.PICKUP_COLLECTIBLE then
             local room = self:currentRoomIndex()
             checkRoomCache() -- Need to check if item spawned before room event
             if self.COLLECTIBLE_CACHE[room][tostring(pickup.SubType)] ~= true then
+                if self.preserveItems[pickup.SubType] then
+                    return
+                end
                 -- Errors if run before connected, what to do?
                 local item_step = self.SLOT_DATA.itemPickupStep
                 self.CUR_ITEM_STEP_VAL = self.CUR_ITEM_STEP_VAL + 1
@@ -135,7 +137,7 @@ function AP:init()
                     self.CUR_ITEM_STEP_VAL = 0
                     local itemConfig = Isaac.GetItemConfig():GetCollectible(pickup.SubType)
                     local apItem = self.AP_ITEM_ID
-                    if pickup.Variant == PickupVariant.PICKUP_SHOPITEM and (itemConfig.ShopPrice == 10 or
+                    if pickup.SubType == PickupVariant.PICKUP_SHOPITEM and (itemConfig.ShopPrice == 10 or
                             (pickup.Price < 1 and itemConfig.DevilPrice == 1 or not itemConfig.DevilPrice)) then
                         apItem = self.AP_ITEM_ID_CHEAP
                     end
@@ -150,10 +152,15 @@ function AP:init()
             end
         end
     end
+    -- Does this trigger on pickups colliding with each other?
     function self.prePickupCollision(mod, pickup, collider, low)
         if pickup.Variant == PickupVariant.PICKUP_COLLECTIBLE then
             local player = Isaac.GetPlayer()
             local itemConfig = Isaac.GetItemConfig():GetCollectible(pickup.SubType)
+            if itemConfig == nil then
+                dbg_log("No item config found for " .. pickup.SubType)
+                return
+            end
             if itemConfig.Type == ItemType.ITEM_ACTIVE and player:GetActiveItem() ~= nil then
                 self.COLLECTIBLE_CACHE[self:currentRoomIndex()][tostring(player:GetActiveItem())] = true
                 self:saveCacheData()
@@ -480,6 +487,15 @@ function AP:init()
     self.NOTE_INFO = {}
     self.COMPLETED_NOTES = 0
     self.COMPLETED_NOTE_MARKS = 0
+
+    self.preserveItems = {
+        [self.AP_ITEM_ID] = true,
+        [self.AP_ITEM_ID_CHEAP] = true,
+        [CollectibleType.COLLECTIBLE_POLAROID] = true,
+        [CollectibleType.COLLECTIBLE_NEGATIVE] = true,
+        [CollectibleType.COLLECTIBLE_KEY_PIECE_1] = true,
+        [CollectibleType.COLLECTIBLE_KEY_PIECE_2] = true
+    }
     print("called AP:init", 4, "end")
 end
 
