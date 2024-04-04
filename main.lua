@@ -16,7 +16,7 @@ require('ap_data_storage')
 function AP:init()
     AP.INSTANCE = self
     dbg_log("called AP:init 1")
-    self:generateCollectableItemImpls(78040)
+    self:generateCollectableItemImpls(AP.BASE_ID + 040)
     self.RNG = RNG()
     self.RNG:SetSeed(Random(), 35)
     self.DEBUG_MODE = false
@@ -226,8 +226,6 @@ function AP:init()
                         tostring(self.LAMB_KILL))
         end
         print('called entityKill', 3, "is goal boss", type, entity.Variant)
-        local playerType = Isaac.GetPlayer():GetPlayerType()
-        local isHardMode = self:isHardMode()
         -- blue baby uses a SubType of Isaac => requries special handling
         if type == EntityType.ENTITY_ISAAC then
             if entity.Variant == 0 then

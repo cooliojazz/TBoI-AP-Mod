@@ -1,11 +1,19 @@
-local APClient = package.loadlib(script_path() .. 'lua-apclientpp.dll', 'luaopen_apclientpp')()
+
+
+local lua_dir = 'lua533r-clang32-dynamic'
+if IS_REPENTOGON then
+    lua_dir = 'lua54-clang32-static'
+end
+local luaapclient_dir = script_path() .. 'lib' .. DIR_SEP .. lua_dir .. DIR_SEP .. 'lua-apclientpp.dll'
+---@type APClient
+local APClient = package.loadlib(luaapclient_dir, 'luaopen_apclientpp')()
 local json = require('json')
 
--- AP client / Mod version 
-AP.VERSION = {0, 3, 0}
+-- AP client / Mod version
+AP.VERSION = { 0, 3, 0 }
 AP.GAME_NAME = "The Binding of Isaac Repentance"
 AP.ITEM_HANDLING = 7 -- fully remote
-AP.TAGS = {"Lua-APClientPP"}
+AP.TAGS = { "Lua-APClientPP" }
 AP.STATES = {
     [0] = "Disconnected",
     [1] = "Socket connecting",
@@ -30,7 +38,6 @@ function AP:initAPClient()
         self.LAMB_KILL = false
         self.LAMB_BODY_KILL = false
         self.HAS_SEND_GOAL_MSG = false
-
     end
 
     function self.on_room_info()
@@ -47,7 +54,7 @@ function AP:initAPClient()
         self.SLOT_DATA = slot_data
         dbg_log("Connected 1" .. dump_table(self.CONNECTION_INFO))
         if self.SLOT_DATA.deathLink and self.SLOT_DATA.deathLink == 1 then
-            local tags = {table.unpack(AP.TAGS), "DeathLink"}
+            local tags = { table.unpack(AP.TAGS), "DeathLink" }
             self.AP_CLIENT:ConnectUpdate(nil, tags)
         end
         self.HAS_SEND_GOAL_MSG = false
@@ -74,10 +81,10 @@ function AP:initAPClient()
         if required_locations and goal and #self.AP_CLIENT.checked_locations >= required_locations then
             if not self.HAS_SEND_GOAL_MSG then
                 self:addMessage({
-                    parts = {{
+                    parts = { {
                         msg = "You have collected enough items to beat the game. Goal: " .. self:goalIdToName(goal),
                         color = COLORS.GREEN
-                    }}
+                    } }
                 })
                 self.HAS_SEND_GOAL_MSG = true
             end
@@ -98,10 +105,11 @@ function AP:initAPClient()
             if not self:loadOtherData(self.SLOT_DATA.seed) then
                 self.AP_CLIENT = nil
                 self:addMessage({
-                    parts = {{
-                        msg = "You are continuing a run of a different slot/game. You have beeen disconnected from the AP server. Please start a new run.",
+                    parts = { {
+                        msg =
+                        "You are continuing a run of a different slot/game. You have beeen disconnected from the AP server. Please start a new run.",
                         color = COLORS.RED
-                    }}
+                    } }
                 })
                 return
             end
@@ -127,10 +135,10 @@ function AP:initAPClient()
             -- end
         end
         self:addMessage({
-            parts = {{
+            parts = { {
                 msg = "Connection refused by AP Server." .. errsMsgs,
                 color = COLORS.RED
-            }}
+            } }
         })
         self.CONNECTION_INFO = nil
         self.ROOM_INFO = nil
@@ -177,10 +185,10 @@ function AP:initAPClient()
         if required_locations and goal and #self.AP_CLIENT.checked_locations >= required_locations then
             if not self.HAS_SEND_GOAL_MSG then
                 self:addMessage({
-                    parts = {{
+                    parts = { {
                         msg = "You have collected enough items to beat the game. Goal: " .. self:goalIdToName(goal),
                         color = COLORS.GREEN
-                    }}
+                    } }
                 })
                 self.HAS_SEND_GOAL_MSG = true
             end
@@ -216,14 +224,14 @@ function AP:initAPClient()
                 local text = v.text
                 local color = COLORS.WHITE
                 if not v.type or v.type == "text" then
-                    -- nothing to do                
+                    -- nothing to do
                 elseif v.type == "player_id" then
                     text = self:resolveIdToName(v.type, v.text)
                     color = COLORS.BLUE
                 elseif v.type == "player_name" then
                     color = COLORS.BLUE
                 elseif v.type == "item_id" then
-                    text = self:resolveIdToName(v.type, v.text)
+                    text = self:resolveIdToName(v.type, v.text, v.player)
                     if v.flags & 4 == 4 then
                         color = COLORS.RED
                     elseif v.flags & 2 == 2 or v.flags & 1 == 1 then
@@ -240,7 +248,7 @@ function AP:initAPClient()
                         color = COLORS.GREEN
                     end
                 elseif v.type == "location_id" then
-                    text = self:resolveIdToName(v.type, v.text)
+                    text = self:resolveIdToName(v.type, v.text, v.player)
                     color = COLORS.MAGENTA
                 elseif v.type == "location_name" then
                     color = COLORS.MAGENTA
@@ -289,10 +297,10 @@ function AP:initAPClient()
                 local cause = bounce.data.cause or "unknown"
                 local source = bounce.data.source or "unknown"
                 self:addMessage({
-                    parts = {{
+                    parts = { {
                         msg = "[DeathLink] Killed by " .. source .. ". Reason: " .. cause,
                         color = COLORS.RED
-                    }}
+                    } }
                 })
                 self.LAST_DEATH_LINK_RECV = bounce.data.time
             end
@@ -337,22 +345,23 @@ function AP:initAPClient()
                 end
             end
         end
-
     end
 end
 
-function AP:resolveIdToName(typeStr, id)
+function AP:resolveIdToName(typeStr, id, slot)
     --dbg_log("AP:resolveIdToName " .. typeStr .. " " .. tostring(id))
     if string.find(typeStr, "location") then
         if type(id) == "string" then
             id = tonumber(id)
         end
-        return self.AP_CLIENT:get_location_name(id)
+        local game = self.AP_CLIENT:get_player_game(slot)
+        return self.AP_CLIENT:get_location_name(id, game)
     elseif string.find(typeStr, "item") then
         if type(id) == "string" then
             id = tonumber(id)
         end
-        return self.AP_CLIENT:get_item_name(id)
+        local game = self.AP_CLIENT:get_player_game(slot)
+        return self.AP_CLIENT:get_item_name(id, game)
     elseif string.find(typeStr, "player") then
         if type(id) == "string" then
             id = tonumber(id)
@@ -360,13 +369,15 @@ function AP:resolveIdToName(typeStr, id)
         --dbg_log("AP:resolveIdToName player " .. tostring(id))
         return self.AP_CLIENT:get_player_alias(id)
     else
-        dbg_log('!!! can to resolve Id to Name of unknown type '..typeStr..' !!!')
+        dbg_log('!!! can to resolve Id to Name of unknown type ' .. typeStr .. ' !!!')
         return id
     end
 end
+
 function AP:sendLocationsCleared(ids)
     self.AP_CLIENT:LocationChecks(ids)
 end
+
 function AP:sendDeathLinkBounce(cause, source)
     cause = cause or AP.GAME_NAME
     source = source or self.AP_CLIENT:get_player_alias(self.CONNECTION_INFO.slot)
@@ -377,33 +388,36 @@ function AP:sendDeathLinkBounce(cause, source)
         time = time,
         cause = cause,
         source = source
-    }, {}, {}, {"DeathLink"})
+    }, {}, {}, { "DeathLink" })
     dbg_log("AP:sendDeathLinkBounce " .. tostring(self.AP_CLIENT))
     dbg_log("AP:sendDeathLinkBounce " .. tostring(res))
 end
+
 function AP:collectSlot()
-    if self.AP_CLIENT:get_state() ~= APClient.State["SLOT_CONNECTED"] then
+    if self.AP_CLIENT:get_state() ~= APClient.State.SLOT_CONNECTED then
         self:addMessage({
-            parts = {{
+            parts = { {
                 msg = "You can not collect when you are not connected",
                 color = COLORS.RED
-            }}
+            } }
         })
         return
     end
     self.AP_CLIENT:Say("!collect")
 end
+
 function AP:releaseSlot()
-    if self.AP_CLIENT:get_state() ~= APClient.State["SLOT_CONNECTED"] then
+    if self.AP_CLIENT:get_state() ~= APClient.State.SLOT_CONNECTED then
         self:addMessage({
-            parts = {{
+            parts = { {
                 msg = "You can not release! (not connected or no permission)",
                 color = COLORS.RED
-            }}
+            } }
         })
     end
     self.AP_CLIENT:Say("!release")
 end
+
 function AP:sendHintCommand(isLocation, name)
     local text = "!hint"
     if isLocation then
@@ -414,6 +428,7 @@ function AP:sendHintCommand(isLocation, name)
     end
     self.AP_CLIENT:Say(text)
 end
+
 function AP:sendGoalReached()
     dbg_log('sendGoalReached')
     self.AP_CLIENT:StatusUpdate(30)
@@ -423,6 +438,7 @@ function AP:connectAP()
     self.LAST_RECEIVED_ITEM_INDEX = -1
     local uuid = ""
     print("AP:connect_ap", uuid, AP.GAME_NAME, self.HOST_ADDRESS .. ":" .. self.HOST_PORT)
+    ---@type APClient
     self.AP_CLIENT = APClient(uuid, AP.GAME_NAME, self.HOST_ADDRESS .. ":" .. self.HOST_PORT)
 
     self.AP_CLIENT:set_socket_connected_handler(self.on_socket_connected)
